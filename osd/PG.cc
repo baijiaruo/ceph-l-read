@@ -576,9 +576,9 @@ bool PG::search_for_missing(
 bool PG::MissingLoc::readable_with_acting(
   const hobject_t &hoid,
   const set<pg_shard_t> &acting) const {
-  if (!needs_recovery(hoid))
+  if (!needs_recovery(hoid))//该对象不需要恢复
     return true;
-  if (is_deleted(hoid))
+  if (is_deleted(hoid))//要被删除
     return false;
   auto missing_loc_entry = missing_loc.find(hoid);
   if (missing_loc_entry == missing_loc.end())
@@ -592,7 +592,7 @@ bool PG::MissingLoc::readable_with_acting(
     if (acting.count(*i))
       have_acting.insert(*i);
   }
-  return (*is_readable)(have_acting);
+  return (*is_readable)(have_acting);//have_acting有主就可以读
 }
 
 void PG::MissingLoc::add_batch_sources_info(

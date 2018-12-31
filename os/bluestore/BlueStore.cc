@@ -2728,7 +2728,7 @@ BlueStore::extent_map_t::iterator BlueStore::ExtentMap::find(
   Extent dummy(offset);
   return extent_map.find(dummy);
 }
-
+//返回大于或者包含offset的extent
 BlueStore::extent_map_t::iterator BlueStore::ExtentMap::seek_lextent(
   uint64_t offset)
 {
@@ -3222,7 +3222,7 @@ BlueStore::OnodeRef BlueStore::Collection::get_onode(
   OnodeRef o = onode_map.lookup(oid);
   if (o)
     return o;
-
+  /*重建onode流程*/
   mempool::bluestore_cache_other::string key;
   get_object_key(store->cct, oid, &key);
 
@@ -3233,7 +3233,7 @@ BlueStore::OnodeRef BlueStore::Collection::get_onode(
   int r = store->db->get(PREFIX_OBJ, key.c_str(), key.size(), &v);
   ldout(store->cct, 20) << " r " << r << " v.len " << v.length() << dendl;
   Onode *on;
-  if (v.length() == 0) {
+  if (v.length() == 0) {//创建一个新的onode流程
     assert(r == -ENOENT);
     if (!store->cct->_conf->bluestore_debug_misc &&
 	!create)
@@ -3241,7 +3241,7 @@ BlueStore::OnodeRef BlueStore::Collection::get_onode(
 
     // new object, new onode
     on = new Onode(this, oid, key);
-  } else {
+  } else {//加载一个老的onode流程
     // loaded
     assert(r >= 0);
     on = new Onode(this, oid, key);
@@ -4189,7 +4189,7 @@ int BlueStore::_open_bdev(bool create)
   // initialize global block parameters
   block_size = bdev->get_block_size();
   block_mask = ~(block_size - 1);
-  block_size_order = ctz(block_size);//返回多少个bit？
+  block_size_order = ctz(block_size);//返回多少位bit，比方说4k就是12
   assert(block_size == 1u << block_size_order);
   // and set cache_size based on device type
   r = _set_cache_sizes();//设置bluestore cache相关参数
@@ -4337,7 +4337,7 @@ int BlueStore::_open_alloc()
   fm->enumerate_reset();
   uint64_t offset, length;
   while (fm->enumerate_next(&offset, &length)) {
-    alloc->init_add_free(offset, length);
+    alloc->init_add_free(offset, length);//增加空闲空间
     ++num;
     bytes += length;
   }
@@ -6563,7 +6563,7 @@ int BlueStore::_do_read(
   unsigned left = length;
   uint64_t pos = offset;
   unsigned num_regions = 0;
-  auto lp = o->extent_map.seek_lextent(offset);
+  auto lp = o->extent_map.seek_lextent(offset);//数据结构为Extent
   while (left > 0 && lp != o->extent_map.extent_map.end()) {
     if (pos < lp->logical_offset) {
       unsigned hole = lp->logical_offset - pos;
@@ -6708,7 +6708,7 @@ int BlueStore::_do_read(
       }
     }
   }
-  if (ioc.has_pending_aios()) {
+  if (ioc.has_pending_aios()) {//等待read返回
     bdev->aio_submit(&ioc);
     dout(20) << __func__ << " waiting for aio" << dendl;
     ioc.aio_wait();
@@ -7884,12 +7884,12 @@ void BlueStore::_txc_state_proc(TransContext *txc)
       if (txc->ioc.has_pending_aios()) {
 	txc->state = TransContext::STATE_AIO_WAIT;
 	txc->had_ios = true;
-	_txc_aio_submit(txc);
+	_txc_aio_submit(txc);//提交libaio
 	return;
       }
       // ** fall-thru **
 
-    case TransContext::STATE_AIO_WAIT:
+    case TransContext::STATE_AIO_WAIT://一般这个状态直接跳到下一个状态
       txc->log_state_latency(logger, l_bluestore_state_aio_wait_lat);
       _txc_finish_io(txc);  // may trigger blocked txc's too
       return;
@@ -7901,7 +7901,7 @@ void BlueStore::_txc_state_proc(TransContext *txc)
       }
       txc->log_state_latency(logger, l_bluestore_state_io_done_lat);
       txc->state = TransContext::STATE_KV_QUEUED;
-      if (cct->_conf->bluestore_sync_submit_transaction) {
+      if (cct->_conf->bluestore_sync_submit_transaction) {//默认false
 	if (txc->last_nid >= nid_max ||
 	    txc->last_blobid >= blobid_max) {
 	  dout(20) << __func__
@@ -8461,7 +8461,7 @@ void BlueStore::_kv_sync_thread()
     assert(kv_committing.empty());
     if (kv_queue.empty() &&
 	((deferred_done_queue.empty() && deferred_stable_queue.empty()) ||
-	 !deferred_aggressive)) {
+	 !deferred_aggressive)) {//队列为空的场景
       if (kv_stop)
 	break;
       dout(20) << __func__ << " sleep" << dendl;
@@ -8552,9 +8552,9 @@ void BlueStore::_kv_sync_thread()
       }
 
       for (auto txc : kv_committing) {
-	if (txc->state == TransContext::STATE_KV_QUEUED) {
+	if (txc->state == TransContext::STATE_KV_QUEUED) {//正常流程处理kv commit
 	  txc->log_state_latency(logger, l_bluestore_state_kv_queued_lat);
-	  int r = cct->_conf->bluestore_debug_omit_kv_commit ? 0 : db->submit_transaction(txc->t);
+	  int r = cct->_conf->bluestore_debug_omit_kv_commit ? 0 : db->submit_transaction(txc->t);//默认会调用submit_transaction,提交整个事务
 	  assert(r == 0);
 	  _txc_applied_kv(txc);
 	  --txc->osr->kv_committing_serially;
@@ -8586,7 +8586,7 @@ void BlueStore::_kv_sync_thread()
       PExtentVector bluefs_gift_extents;
       if (bluefs &&
 	  after_flush - bluefs_last_balance >
-	  cct->_conf->bluestore_bluefs_balance_interval) {
+	  cct->_conf->bluestore_bluefs_balance_interval) {//定期调用
 	bluefs_last_balance = after_flush;
 	int r = _balance_bluefs_freespace(&bluefs_gift_extents);
 	assert(r >= 0);
@@ -9598,7 +9598,7 @@ void BlueStore::_do_write_small(
     prev_ep = end; // to avoid this extent check as it's a duplicate
   }
 
-  auto max_bsize = MAX(wctx->target_blob_size, min_alloc_size);
+  auto max_bsize = MAX(wctx->target_blob_size, min_alloc_size);//target_blob_size是512k，min_alloc_size默认64k
   auto min_off = offset >= max_bsize ? offset - max_bsize : 0;
   uint32_t alloc_len = min_alloc_size;
   auto offset0 = P2ALIGN(offset, alloc_len);
@@ -9625,7 +9625,7 @@ void BlueStore::_do_write_small(
       } else if (ep->logical_offset % min_alloc_size !=
 		  ep->blob_offset % min_alloc_size) {
 	dout(20) << __func__ << " ignoring offset-skewed " << *b << dendl;
-      } else {
+      } else {//一般正常流程
 	uint64_t chunk_size = b->get_blob().get_chunk_size(block_size);
 	// can we pad our head/tail out with zeros?
 	uint64_t head_pad, tail_pad;
@@ -9642,7 +9642,7 @@ void BlueStore::_do_write_small(
 	if (tail_pad && o->extent_map.has_any_lextents(end_offs, tail_pad)) {
 	  tail_pad = 0;
 	}
-
+    //上面一段主要是为了按照chunk_size对齐？
 	uint64_t b_off = offset - head_pad - bstart;
 	uint64_t b_len = length + head_pad + tail_pad;
 
@@ -9660,8 +9660,8 @@ void BlueStore::_do_write_small(
 	  _buffer_cache_write(txc, b, b_off, bl,
 			      wctx->buffered ? 0 : Buffer::FLAG_NOCACHE);
 
-	  if (!g_conf->bluestore_debug_omit_block_device_write) {
-	    if (b_len <= prefer_deferred_size) {
+	  if (!g_conf->bluestore_debug_omit_block_device_write) {//默认会进该分支
+	    if (b_len <= prefer_deferred_size) {//io小的情况会进行延迟写，默认32k
 	      dout(20) << __func__ << " deferring small 0x" << std::hex
 		       << b_len << std::dec << " unused write via deferred" << dendl;
 	      bluestore_deferred_op_t *op = _get_deferred_op(txc, o);
@@ -9710,7 +9710,7 @@ void BlueStore::_do_write_small(
 	if (b->get_blob().get_ondisk_length() >= b_off + b_len &&
 	    b_off % chunk_size == 0 &&
 	    b_len % chunk_size == 0 &&
-	    b->get_blob().is_allocated(b_off, b_len)) {
+	    b->get_blob().is_allocated(b_off, b_len)) {//整块覆盖的场景？
 
 	  _apply_padding(head_pad, tail_pad, bl);
 
@@ -9863,12 +9863,12 @@ void BlueStore::_do_write_small(
 
   // new blob.
   
-  BlobRef b = c->new_blob();
+  BlobRef b = c->new_blob();//新创建一个blob
   uint64_t b_off = P2PHASE(offset, alloc_len);
   uint64_t b_off0 = b_off;
   _pad_zeros(&bl, &b_off0, block_size);
   o->extent_map.punch_hole(c, offset, length, &wctx->old_extents);
-  wctx->write(offset, b, alloc_len, b_off0, bl, b_off, length, true, true);
+  wctx->write(offset, b, alloc_len, b_off0, bl, b_off, length, true, true);//插入wctx的write_item
   logger->inc(l_bluestore_write_small_new);
 
   return;
@@ -10009,7 +10009,7 @@ int BlueStore::_do_alloc_write(
   }
 
   // checksum
-  int csum = csum_type.load();
+  int csum = csum_type.load();//获取checksum类型
   csum = select_option(
     "csum_type",
     csum,
@@ -10024,7 +10024,7 @@ int BlueStore::_do_alloc_write(
 
   // compress (as needed) and calc needed space
   uint64_t need = 0;
-  auto max_bsize = MAX(wctx->target_blob_size, min_alloc_size);
+  auto max_bsize = MAX(wctx->target_blob_size, min_alloc_size);//target_blob_size是512k
   for (auto& wi : wctx->writes) {
     if (c && wi.blob_length > min_alloc_size) {
       utime_t start = ceph_clock_now();
@@ -10087,9 +10087,9 @@ int BlueStore::_do_alloc_write(
     return r;
   }
   AllocExtentVector prealloc;
-  prealloc.reserve(2 * wctx->writes.size());;
+  prealloc.reserve(2 * wctx->writes.size());//只是reserve，不是真正的空间
   int prealloc_left = 0;
-  prealloc_left = alloc->allocate(
+  prealloc_left = alloc->allocate(//分配extent
     need, min_alloc_size, need,
     0, &prealloc);
   assert(prealloc_left == (int64_t)need);
@@ -10100,7 +10100,7 @@ int BlueStore::_do_alloc_write(
     BlobRef b = wi.b;
     bluestore_blob_t& dblob = b->dirty_blob();
     uint64_t b_off = wi.b_off;
-    bufferlist *l = &wi.bl;
+    bufferlist *l = &wi.bl;//真正的data大小
     uint64_t final_length = wi.blob_length;
     uint64_t csum_length = wi.blob_length;
     unsigned csum_order = block_size_order;
@@ -10127,7 +10127,7 @@ int BlueStore::_do_alloc_write(
        (wi.logical_offset - (wi.b_off0 - wi.b_off)) % max_bsize;
       if ((suggested_boff % (1 << csum_order)) == 0 &&
            suggested_boff + final_length <= max_bsize &&
-           suggested_boff > b_off) {
+           suggested_boff > b_off) {//这个分支是什么场景
         dout(20) << __func__ << " forcing blob_offset to 0x"
                  << std::hex << suggested_boff << std::dec << dendl;
         assert(suggested_boff >= b_off);
@@ -10140,13 +10140,13 @@ int BlueStore::_do_alloc_write(
                  << " csum_order " << csum_order
                  << " csum_length 0x" << std::hex << csum_length << std::dec
                  << dendl;
-        dblob.init_csum(csum, csum_order, csum_length);
+        dblob.init_csum(csum, csum_order, csum_length);//初始化csum的参数
       }
     }
 
     AllocExtentVector extents;
     int64_t left = final_length;
-    while (left > 0) {
+    while (left > 0) {//保存alloc_extent到alloc_extents
       assert(prealloc_left > 0);
       if (prealloc_pos->length <= left) {
 	prealloc_left -= prealloc_pos->length;
@@ -10164,13 +10164,13 @@ int BlueStore::_do_alloc_write(
 	break;
       }
     }
-    for (auto& p : extents) {
+    for (auto& p : extents) {//把alloc_extents保存在txc的allocated中
       txc->allocated.insert(p.offset, p.length);
     }
     dblob.allocated(P2ALIGN(b_off, min_alloc_size), final_length, extents);
 
     dout(20) << __func__ << " blob " << *b << dendl;
-    if (dblob.has_csum()) {
+    if (dblob.has_csum()) {//计算csum，并保存在dbob.csum_data
       dblob.calc_csum(b_off, *l);
     }
 
@@ -10180,7 +10180,7 @@ int BlueStore::_do_alloc_write(
         dblob.add_unused(0, b_off);
       }
       if (b_end < wi.blob_length) {
-        dblob.add_unused(b_end, wi.blob_length - b_end);
+        dblob.add_unused(b_end, wi.blob_length - b_end);//计算dblob内哪些chunk 是没有被使用
       }
     }
 
@@ -10188,8 +10188,8 @@ int BlueStore::_do_alloc_write(
                                            b_off + (wi.b_off0 - wi.b_off),
                                            wi.length0,
                                            wi.b,
-                                           nullptr);
-    wi.b->dirty_blob().mark_used(le->blob_offset, le->length);
+                                           nullptr);//分配逻辑的extent,并插入extent_map
+    wi.b->dirty_blob().mark_used(le->blob_offset, le->length);//前面不是mark过一次了吗
     txc->statfs_delta.stored() += le->length;
     dout(20) << __func__ << "  lex " << *le << dendl;
     _buffer_cache_write(txc, wi.b, b_off, wi.bl,
@@ -10197,7 +10197,7 @@ int BlueStore::_do_alloc_write(
 
     // queue io
     if (!g_conf->bluestore_debug_omit_block_device_write) {
-      if (l->length() <= prefer_deferred_size.load()) {
+      if (l->length() <= prefer_deferred_size.load()) {//如果io过小，则延迟写？
 	dout(20) << __func__ << " deferring small 0x" << std::hex
 		 << l->length() << std::dec << " write via deferred" << dendl;
 	bluestore_deferred_op_t *op = _get_deferred_op(txc, o);
@@ -10513,10 +10513,10 @@ int BlueStore::_do_write(
   auto dirty_end = end;
 
   WriteContext wctx;
-  _choose_write_options(c, o, fadvise_flags, &wctx);
+  _choose_write_options(c, o, fadvise_flags, &wctx);//判断wctx中buffered，compress等字段是否为true
   o->extent_map.fault_range(db, offset, length);
-  _do_write_data(txc, c, o, offset, length, bl, &wctx);
-  r = _do_alloc_write(txc, c, o, &wctx);
+  _do_write_data(txc, c, o, offset, length, bl, &wctx);//填充wctx的write_item
+  r = _do_alloc_write(txc, c, o, &wctx);//分配lextent和blob
   if (r < 0) {
     derr << __func__ << " _do_alloc_write failed with " << cpp_strerror(r)
 	 << dendl;

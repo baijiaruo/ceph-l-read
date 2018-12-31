@@ -270,7 +270,7 @@ void StupidAllocator::dump()
     }
   }
 }
-
+//构建分配器中可用空间
 void StupidAllocator::init_add_free(uint64_t offset, uint64_t length)
 {
   std::lock_guard<std::mutex> l(lock);
@@ -289,7 +289,7 @@ void StupidAllocator::init_rm_free(uint64_t offset, uint64_t length)
   rm.insert(offset, length);
   for (unsigned i = 0; i < free.size() && !rm.empty(); ++i) {
     interval_set_t overlap;
-    overlap.intersection_of(rm, free[i]);
+    overlap.intersection_of(rm, free[i]);//找rm和free之间的交集
     if (!overlap.empty()) {
       dout(20) << __func__ << " bin " << i << " rm 0x" << std::hex << overlap
 	       << std::dec << dendl;

@@ -343,7 +343,7 @@ void PrimaryLogPG::on_local_recover(
 
   ObjectRecoveryInfo recovery_info(_recovery_info);
   clear_object_snap_mapping(t, hoid);
-  if (!is_delete && recovery_info.soid.is_snap()) {
+  if (!is_delete && recovery_info.soid.is_snap()) {//非删除对象，且是快照的场景
     OSDriver::OSTransaction _t(osdriver.get_transaction(t));
     set<snapid_t> snaps;
     dout(20) << " snapset " << recovery_info.ss
@@ -365,7 +365,7 @@ void PrimaryLogPG::on_local_recover(
       &_t);
   }
   if (!is_delete && pg_log.get_missing().is_missing(recovery_info.soid) &&
-      pg_log.get_missing().get_items().find(recovery_info.soid)->second.need > recovery_info.version) {
+      pg_log.get_missing().get_items().find(recovery_info.soid)->second.need > recovery_info.version) {//按道理这2个版本应该是一样的？
     assert(is_primary());
     const pg_log_entry_t *latest = pg_log.get_log().objects.find(recovery_info.soid)->second;
     if (latest->op == pg_log_entry_t::LOST_REVERT &&
@@ -583,13 +583,13 @@ void PrimaryLogPG::maybe_kick_recovery(
     dout(7) << "object " << soid << " v " << v << ", recovering." << dendl;
     PGBackend::RecoveryHandle *h = pgbackend->open_recovery_op();
     if (is_missing_object(soid)) {//主上有数据missing的场景
-      recover_missing(soid, v, cct->_conf->osd_client_op_priority, h);
+      recover_missing(soid, v, cct->_conf->osd_client_op_priority, h);//打包要pull或者push的op
     } else if (missing_loc.is_deleted(soid)) {
       prep_object_replica_deletes(soid, v, h);
     } else {
       prep_object_replica_pushes(soid, v, h);
     }
-    pgbackend->run_recovery_op(h, cct->_conf->osd_client_op_priority);
+    pgbackend->run_recovery_op(h, cct->_conf->osd_client_op_priority);//发送请求
   }
 }
 
@@ -2032,7 +2032,7 @@ void PrimaryLogPG::do_op(OpRequestRef& op)
 	   << dendl;
 
   // missing object?
-  if (is_unreadable_object(head)) {
+  if (is_unreadable_object(head)) {//多副本场景：head在主上是missing，则不可读。EC场景：要足够多的分片不可读，则不可读
     if (!is_primary()) {
       osd->reply_op_error(op, -EAGAIN);
       return;
@@ -2049,7 +2049,7 @@ void PrimaryLogPG::do_op(OpRequestRef& op)
   }
 
   // degraded object?
-  if (write_ordered && is_degraded_or_backfilling_object(head)) {
+  if (write_ordered && is_degraded_or_backfilling_object(head)) {//对象还在backfilling流程中未恢复
     if (can_backoff && g_conf->osd_backoff_on_degraded) {
       add_backoff(session, head, head);
       maybe_kick_recovery(head);
@@ -10359,14 +10359,14 @@ int PrimaryLogPG::recover_missing(
   int priority,
   PGBackend::RecoveryHandle *h)
 {
-  if (missing_loc.is_unfound(soid)) {
+  if (missing_loc.is_unfound(soid)) {//恢复的对象如果找不到，无法恢复
     dout(7) << "pull " << soid
 	    << " v " << v 
 	    << " but it is unfound" << dendl;
     return PULL_NONE;
   }
 
-  if (missing_loc.is_deleted(soid)) {
+  if (missing_loc.is_deleted(soid)) {//删除对象的场景
     start_recovery_op(soid);
     assert(!recovering.count(soid));
     recovering.insert(make_pair(soid, ObjectContextRef()));
@@ -10446,9 +10446,9 @@ int PrimaryLogPG::recover_missing(
 	0);
     assert(head_obc);
   }
-  start_recovery_op(soid);
+  start_recovery_op(soid);//pg和osd的recovery计数都会增加
   assert(!recovering.count(soid));
-  recovering.insert(make_pair(soid, obc));
+  recovering.insert(make_pair(soid, obc));//对象加入到recovering队列
   int r = pgbackend->recover_object(
     soid,
     v,
@@ -10493,7 +10493,7 @@ void PrimaryLogPG::remove_missing_object(const hobject_t &soid,
   recovery_info.version = v;
 
   epoch_t cur_epoch = get_osdmap()->get_epoch();
-  t.register_on_complete(new FunctionContext(
+  t.register_on_complete(new FunctionContext(//一层回调
      [=](int) {
        lock();
        if (!pg_has_reset_since(cur_epoch)) {
@@ -11438,12 +11438,12 @@ bool PrimaryLogPG::start_recovery_ops(
     return false;
   }
 
-  const auto &missing = pg_log.get_missing();
+  const auto &missing = pg_log.get_missing();//主pgmissing的信息
 
   unsigned int num_missing = missing.num_missing();
-  uint64_t num_unfound = get_num_unfound();
+  uint64_t num_unfound = get_num_unfound();//所有找不到的对象
 
-  if (num_missing == 0) {
+  if (num_missing == 0) {//主没有丢失对象
     info.last_complete = info.last_update;
   }
 
@@ -11452,7 +11452,7 @@ bool PrimaryLogPG::start_recovery_ops(
     // Recover the replicas.
     started = recover_replicas(max, handle);
   }
-  if (!started) {
+  if (!started) {//started初始为0场景的入口
     // We still have missing objects that we should grab from replicas.
     started += recover_primary(max, handle);
   }
@@ -11591,15 +11591,15 @@ uint64_t PrimaryLogPG::recover_primary(uint64_t max, ThreadPool::TPHandle &handl
   unsigned started = 0;
   int skipped = 0;
 
-  PGBackend::RecoveryHandle *h = pgbackend->open_recovery_op();
+  PGBackend::RecoveryHandle *h = pgbackend->open_recovery_op();//new一个RPGHandle
   map<version_t, hobject_t>::const_iterator p =
-    missing.get_rmissing().lower_bound(pg_log.get_log().last_requested);
-  while (p != missing.get_rmissing().end()) {
+    missing.get_rmissing().lower_bound(pg_log.get_log().last_requested);//从大于pglog中last_requested版本的对象开始恢复
+  while (p != missing.get_rmissing().end()) {//循环恢复对象
     handle.reset_tp_timeout();
     hobject_t soid;
     version_t v = p->first;
 
-    if (pg_log.get_log().objects.count(p->second)) {
+    if (pg_log.get_log().objects.count(p->second)) {//pglog中有该对象，则soid使用pglog中的hobject
       latest = pg_log.get_log().objects.find(p->second)->second;
       assert(latest->is_update() || latest->is_delete());
       soid = latest->soid;
@@ -11698,10 +11698,10 @@ uint64_t PrimaryLogPG::recover_primary(uint64_t max, ThreadPool::TPHandle &handl
       }
     }
    
-    if (!recovering.count(soid)) {
-      if (recovering.count(head)) {
+    if (!recovering.count(soid)) {//对象没有在恢复
+      if (recovering.count(head)) {//head在恢复，快照场景？
 	++skipped;
-      } else {
+      } else {//如果没有在恢复则进行恢复
 	int r = recover_missing(
 	  soid, need, get_recovery_op_priority(), h);
 	switch (r) {
@@ -11716,7 +11716,7 @@ uint64_t PrimaryLogPG::recover_primary(uint64_t max, ThreadPool::TPHandle &handl
 	default:
 	  ceph_abort();
 	}
-	if (started >= max)
+	if (started >= max)//退出循环
 	  break;
       }
     }

@@ -21,9 +21,9 @@
 
 struct C_ReplicatedBackend_OnPullComplete;
 class ReplicatedBackend : public PGBackend {
-  struct RPGHandle : public PGBackend::RecoveryHandle {
-    map<pg_shard_t, vector<PushOp> > pushes;
-    map<pg_shard_t, vector<PullOp> > pulls;
+  struct RPGHandle : public PGBackend::RecoveryHandle {//恢复句柄
+    map<pg_shard_t, vector<PushOp> > pushes;//恢复其他节点的op列表
+    map<pg_shard_t, vector<PullOp> > pulls;//恢复自己节点的op列表
   };
   friend struct C_ReplicatedBackend_OnPullComplete;
 public:
@@ -83,7 +83,7 @@ public:
     pg_shard_t whoami;
   public:
     explicit RPCReadPred(pg_shard_t whoami) : whoami(whoami) {}
-    bool operator()(const set<pg_shard_t> &have) const override {
+    bool operator()(const set<pg_shard_t> &have) const override {//主活着就可以读
       return have.count(whoami);
     }
   };
@@ -213,7 +213,7 @@ private:
     }
   };
 
-  map<hobject_t, PullInfo> pulling;
+  map<hobject_t, PullInfo> pulling;//保存pg正在恢复的pull请求
 
   // Reverse mapping from osd peer to objects beging pulled from that peer
   map<pg_shard_t, set<hobject_t> > pull_from_peer;

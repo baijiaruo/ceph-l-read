@@ -16,14 +16,14 @@ class StupidAllocator : public Allocator {
   CephContext* cct;
   std::mutex lock;
 
-  int64_t num_free;     ///< total bytes in freelist
-  int64_t num_reserved; ///< reserved bytes
+  int64_t num_free;     ///< total bytes in freelist 总空闲空间
+  int64_t num_reserved; ///< reserved bytes   预留空间
 
   typedef mempool::bluestore_alloc::pool_allocator<
     pair<const uint64_t,uint64_t>> allocator_t;
   typedef btree::btree_map<uint64_t,uint64_t,std::less<uint64_t>,allocator_t> interval_set_map_t;
-  typedef interval_set<uint64_t,interval_set_map_t> interval_set_t;
-  std::vector<interval_set_t> free;  ///< leading-edge copy
+  typedef interval_set<uint64_t,interval_set_map_t> interval_set_t;//数据结构中map保存了offset，len，size=len
+  std::vector<interval_set_t> free;  ///< leading-edge copy 由不同的区间组成的vector
 
   uint64_t last_alloc;
 

@@ -479,7 +479,7 @@ public:
     SharedBlobRef shared_blob;      ///< shared blob state (if any)
 
   private:
-    mutable bluestore_blob_t blob;  ///< decoded blob metadata
+    mutable bluestore_blob_t blob;  ///< decoded blob metadata blob元数据
 #ifdef CACHE_BLOB_BL
     mutable bufferlist blob_bl;     ///< cached encoded blob, blob is dirty if empty
 #endif
@@ -647,7 +647,7 @@ public:
     MEMPOOL_CLASS_HELPERS();
 
     uint32_t logical_offset = 0;      ///< logical offset
-    uint32_t blob_offset = 0;         ///< blob offset
+    uint32_t blob_offset = 0;         ///< blob offset huyao:extent在blob内的offset
     uint32_t length = 0;              ///< length
     BlobRef  blob;                    ///< the blob with our data
 
@@ -1564,7 +1564,7 @@ public:
     interval_set<uint64_t> allocated, released;
     volatile_statfs statfs_delta;
 
-    IOContext ioc;
+    IOContext ioc;//libaio操作相关数据实例
     bool had_ios = false;  ///< true if we submitted IOs before our kv txn
 
     uint64_t seq = 0;

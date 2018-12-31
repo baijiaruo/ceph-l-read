@@ -1738,7 +1738,7 @@ private:
 public:
   bool is_missing_object(const hobject_t& oid) const;
   bool is_unreadable_object(const hobject_t &oid) const {
-    return is_missing_object(oid) ||
+    return is_missing_object(oid) ||//pg主 miising该oid
       !missing_loc.readable_with_acting(oid, actingset);
   }
   void maybe_kick_recovery(const hobject_t &soid);

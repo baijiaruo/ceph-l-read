@@ -4060,7 +4060,7 @@ void OSDMonitor::dump_info(Formatter *f)
 namespace {
   enum osd_pool_get_choices {
     SIZE, MIN_SIZE, CRASH_REPLAY_INTERVAL,
-    PG_NUM, PGP_NUM, CRUSH_RULE, HASHPSPOOL,
+    PG_NUM, PGP_NUM, CRUSH_RULE, CRUSH_RULESET, HASHPSPOOL,
     NODELETE, NOPGCHANGE, NOSIZECHANGE,
     WRITE_FADVISE_DONTNEED, NOSCRUB, NODEEP_SCRUB,
     HIT_SET_TYPE, HIT_SET_PERIOD, HIT_SET_COUNT, HIT_SET_FPP,
@@ -4662,6 +4662,9 @@ bool OSDMonitor::preprocess_command(MonOpRequestRef op)
       {"crash_replay_interval", CRASH_REPLAY_INTERVAL},
       {"pg_num", PG_NUM}, {"pgp_num", PGP_NUM},
       {"crush_rule", CRUSH_RULE},
+      /* added by huyao */
+      {"crush_ruleset", CRUSH_RULESET},
+      /* added end */
       {"hashpspool", HASHPSPOOL}, {"nodelete", NODELETE},
       {"nopgchange", NOPGCHANGE}, {"nosizechange", NOSIZECHANGE},
       {"noscrub", NOSCRUB}, {"nodeep-scrub", NODEEP_SCRUB},
@@ -4731,6 +4734,13 @@ bool OSDMonitor::preprocess_command(MonOpRequestRef op)
       }
     } else /* var != "all" */  {
       choices_map_t::const_iterator found = ALL_CHOICES.find(var);
+	  /* added by huyao */
+      if (found == ALL_CHOICES.end()) {
+        ss << "var:" << var << " invalid command";
+        r = -EINVAL;
+        goto reply;
+      }
+      /* added end */
       osd_pool_get_choices selected = found->second;
 
       if (!p->is_tier() &&
@@ -4801,6 +4811,11 @@ bool OSDMonitor::preprocess_command(MonOpRequestRef op)
 	      f->dump_string("crush_rule", stringify(p->get_crush_rule()));
 	    }
 	    break;
+	  /* added by huyao */
+      case CRUSH_RULESET: 
+	    f->dump_string("crush_ruleset", stringify(p->get_crush_rule()));	   
+	    break;
+	  /* added end */
 	  case HASHPSPOOL:
 	  case NODELETE:
 	  case NOPGCHANGE:
@@ -4952,6 +4967,11 @@ bool OSDMonitor::preprocess_command(MonOpRequestRef op)
 	      ss << "crush_rule: " << p->get_crush_rule() << "\n";
 	    }
 	    break;
+	  /* added by huyao */
+	  case CRUSH_RULESET:
+	  	ss << "crush_ruleset: " << p->get_crush_rule() << "\n";
+		break;
+	  /* added end */
 	  case HIT_SET_PERIOD:
 	    ss << "hit_set_period: " << p->hit_set_period << "\n";
 	    break;

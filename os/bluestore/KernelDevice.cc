@@ -354,7 +354,7 @@ void KernelDevice::_aio_thread()
     }
     if (r > 0) {
       dout(30) << __func__ << " got " << r << " completed aios" << dendl;
-      for (int i = 0; i < r; ++i) {
+      for (int i = 0; i < r; ++i) {//循环处理每一个io
 	IOContext *ioc = static_cast<IOContext*>(aio[i]->priv);
 	_aio_log_finish(ioc, aio[i]->offset, aio[i]->length);
 	if (aio[i]->queue_item.is_linked()) {
@@ -376,7 +376,7 @@ void KernelDevice::_aio_thread()
           if (ioc->allow_eio && r == -EIO) {
             ioc->set_return_value(r);
           } else {
-            assert(0 == "got unexpected error from io_getevents");
+            assert(0 == "got unexpected error from io_getevents");//坏盘场景？
           }
         } else if (aio[i]->length != (uint64_t)r) {
           derr << "aio to " << aio[i]->offset << "~" << aio[i]->length
@@ -394,7 +394,7 @@ void KernelDevice::_aio_thread()
 	// may free it.
 	if (ioc->priv) {
 	  if (--ioc->num_running == 0) {
-	    aio_callback(aio_callback_priv, ioc->priv);
+	    aio_callback(aio_callback_priv, ioc->priv);//回调aio_cb,最后调用到BlueStore::_txc_state_proc
 	  }
 	} else {
           ioc->try_aio_wake();
@@ -627,7 +627,7 @@ int KernelDevice::aio_write(
   bl.hexdump(*_dout);
   *_dout << dendl;
 
-  _aio_log_start(ioc, off, len);
+  _aio_log_start(ioc, off, len);//默认不生效
 
 #ifdef HAVE_LIBAIO
   if (aio && dio && !buffered) {
@@ -635,7 +635,7 @@ int KernelDevice::aio_write(
     ++ioc->num_pending;
     aio_t& aio = ioc->pending_aios.back();
     if (cct->_conf->bdev_inject_crash &&
-	rand() % cct->_conf->bdev_inject_crash == 0) {
+	rand() % cct->_conf->bdev_inject_crash == 0) {//默认不会走
       derr << __func__ << " bdev_inject_crash: dropping io 0x" << std::hex
 	   << off << "~" << len << std::dec
 	   << dendl;
@@ -650,7 +650,7 @@ int KernelDevice::aio_write(
 		 << " " << aio.iov[i].iov_len << dendl;
       }
       aio.bl.claim_append(bl);
-      aio.pwritev(off, len);
+      aio.pwritev(off, len);//调用libaio的io_prep_pwritev
     }
     dout(5) << __func__ << " 0x" << std::hex << off << "~" << len
 	    << std::dec << " aio " << &aio << dendl;

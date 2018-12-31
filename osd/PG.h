@@ -375,9 +375,9 @@ public:
   ghobject_t    pgmeta_oid;
 
   class MissingLoc {
-    map<hobject_t, pg_missing_item> needs_recovery_map;
-    map<hobject_t, set<pg_shard_t> > missing_loc;
-    set<pg_shard_t> missing_loc_sources;
+    map<hobject_t, pg_missing_item> needs_recovery_map;//需要恢复的丢失对象列表
+    map<hobject_t, set<pg_shard_t> > missing_loc;//位置信息
+    set<pg_shard_t> missing_loc_sources;//有丢失对象的osd列表
     PG *pg;
     set<pg_shard_t> empty_set;
   public:

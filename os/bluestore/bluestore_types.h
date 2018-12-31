@@ -44,7 +44,7 @@ struct bluestore_bdev_label_t {
   void dump(Formatter *f) const;
   static void generate_test_instances(list<bluestore_bdev_label_t*>& o);
 };
-WRITE_CLASS_ENCODER(bluestore_bdev_label_t)
+WRITE_CLASS_ENCODER(bluestore_bdev_label_t);
 
 ostream& operator<<(ostream& out, const bluestore_bdev_label_t& l);
 
@@ -62,7 +62,7 @@ struct bluestore_cnode_t {
   void dump(Formatter *f) const;
   static void generate_test_instances(list<bluestore_cnode_t*>& o);
 };
-WRITE_CLASS_DENC(bluestore_cnode_t)
+WRITE_CLASS_DENC(bluestore_cnode_t);
 
 class AllocExtent;
 typedef mempool::bluestore_alloc::vector<AllocExtent> AllocExtentVector;
@@ -160,7 +160,7 @@ struct bluestore_pextent_t : public AllocExtent {
   void dump(Formatter *f) const;
   static void generate_test_instances(list<bluestore_pextent_t*>& ls);
 };
-WRITE_CLASS_DENC(bluestore_pextent_t)
+WRITE_CLASS_DENC(bluestore_pextent_t);
 
 ostream& operator<<(ostream& out, const bluestore_pextent_t& o);
 
@@ -276,7 +276,7 @@ struct bluestore_extent_ref_map_t {
   void dump(Formatter *f) const;
   static void generate_test_instances(list<bluestore_extent_ref_map_t*>& o);
 };
-WRITE_CLASS_DENC(bluestore_extent_ref_map_t)
+WRITE_CLASS_DENC(bluestore_extent_ref_map_t);
 
 
 ostream& operator<<(ostream& out, const bluestore_extent_ref_map_t& rm);
@@ -475,15 +475,15 @@ struct bluestore_blob_use_tracker_t {
 private:
   void allocate();
 };
-WRITE_CLASS_DENC(bluestore_blob_use_tracker_t)
+WRITE_CLASS_DENC(bluestore_blob_use_tracker_t);
 ostream& operator<<(ostream& out, const bluestore_blob_use_tracker_t& rm);
 
 /// blob: a piece of data on disk
 struct bluestore_blob_t {
 private:
-  PExtentVector extents;              ///< raw data position on device
-  uint32_t logical_length = 0;        ///< original length of data stored in the blob
-  uint32_t compressed_length = 0;     ///< compressed length if any
+  PExtentVector extents;              ///< raw data position on device 对应磁盘上的数据段
+  uint32_t logical_length = 0;        ///< original length of data stored in the blob blob的原始数据长度
+  uint32_t compressed_length = 0;     ///< compressed length if any 压缩的数据长度
 
 public:
   enum {
@@ -498,7 +498,7 @@ public:
   uint32_t flags = 0;                 ///< FLAG_*
 
   typedef uint16_t unused_t;
-  unused_t unused = 0;     ///< portion that has never been written to (bitmap)
+  unused_t unused = 0;     ///< portion that has never been written to (bitmap) blob内部看成一个bitmap
 
   uint8_t csum_type = Checksummer::CSUM_NONE;      ///< CSUM_*
   uint8_t csum_chunk_order = 0;       ///< csum block size is 1<<block_order bytes
@@ -704,7 +704,7 @@ public:
     uint64_t chunk_size = blob_len / (sizeof(unused)*8);
     uint64_t start = ROUND_UP_TO(offset, chunk_size) / chunk_size;
     uint64_t end = (offset + length) / chunk_size;
-    for (auto i = start; i < end; ++i) {
+    for (auto i = start; i < end; ++i) {//标记一个blob内哪些chunk是unused
       unused |= (1u << i);
     }
     if (start != end) {
@@ -928,7 +928,7 @@ struct bluestore_shared_blob_t {
     return ref_map.empty();
   }
 };
-WRITE_CLASS_DENC(bluestore_shared_blob_t)
+WRITE_CLASS_DENC(bluestore_shared_blob_t);
 
 ostream& operator<<(ostream& out, const bluestore_shared_blob_t& o);
 

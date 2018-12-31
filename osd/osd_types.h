@@ -4825,7 +4825,7 @@ struct ObjectRecoveryInfo {
   uint64_t size;
   object_info_t oi;
   SnapSet ss;   // only populated if soid is_snap()
-  interval_set<uint64_t> copy_subset;
+  interval_set<uint64_t> copy_subset;//待恢复的数据范围，如果是0~-1则是恢复整个对象
   map<hobject_t, interval_set<uint64_t>> clone_subset;
 
   ObjectRecoveryInfo() : size(0) { }
@@ -4840,8 +4840,8 @@ WRITE_CLASS_ENCODER_FEATURES(ObjectRecoveryInfo);
 ostream& operator<<(ostream& out, const ObjectRecoveryInfo &inf);
 
 struct ObjectRecoveryProgress {
-  uint64_t data_recovered_to;
-  string omap_recovered_to;
+  uint64_t data_recovered_to;//表示数据开始恢复的offset
+  string omap_recovered_to;//表示下一个待恢复的kv的key
   bool first;
   bool data_complete;
   bool omap_complete;

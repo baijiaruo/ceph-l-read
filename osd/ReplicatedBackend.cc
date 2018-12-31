@@ -905,9 +905,9 @@ void ReplicatedBackend::_do_pull_response(OpRequestRef op)
 	get_parent(),
 	get_parent()->bless_gencontext(c)));
   }
-  replies.erase(replies.end() - 1);
+  replies.erase(replies.end() - 1);//减去多增加的一个空的数据
 
-  if (replies.size()) {
+  if (replies.size()) {//表示有对象未完成
     MOSDPGPull *reply = new MOSDPGPull;
     reply->from = parent->whoami_shard();
     reply->set_priority(m->get_priority());
@@ -919,7 +919,7 @@ void ReplicatedBackend::_do_pull_response(OpRequestRef op)
 
     t.register_on_complete(
       new PG_SendMessageOnConn(
-	get_parent(), reply, m->get_connection()));
+	get_parent(), reply, m->get_connection()));//回调给副本pg发请求
   }
 
   get_parent()->queue_transaction(std::move(t));
@@ -1231,7 +1231,7 @@ void ReplicatedBackend::calc_head_subsets(
 
   uint64_t size = obc->obs.oi.size;
   if (size)
-    data_subset.insert(0, size);
+    data_subset.insert(0, size);//整个对象
 
   if (get_parent()->get_pool().allow_incomplete_clones()) {
     dout(10) << __func__ << ": caching (was) enabled, skipping clone subsets" << dendl;
@@ -1391,7 +1391,7 @@ void ReplicatedBackend::prepare_pull(
 
   // pick a pullee
   vector<pg_shard_t> shuffle(q->second.begin(), q->second.end());
-  random_shuffle(shuffle.begin(), shuffle.end());
+  random_shuffle(shuffle.begin(), shuffle.end());//向随机一个osd去pull
   vector<pg_shard_t>::iterator p = shuffle.begin();
   assert(get_osdmap()->is_up(p->osd));
   pg_shard_t fromshard = *p;
@@ -1404,7 +1404,7 @@ void ReplicatedBackend::prepare_pull(
 
   assert(peer_missing.count(fromshard));
   const pg_missing_t &pmissing = peer_missing.find(fromshard)->second;
-  if (pmissing.is_missing(soid, v)) {
+  if (pmissing.is_missing(soid, v)) {//对方也missing了某个版本，只能拉取对方有的版本
     assert(pmissing.get_items().find(soid)->second.have != v);
     dout(10) << "pulling soid " << soid << " from osd " << fromshard
 	     << " at version " << pmissing.get_items().find(soid)->second.have
@@ -1443,15 +1443,15 @@ void ReplicatedBackend::prepare_pull(
 
     assert(ssc->snapset.clone_size.count(soid.snap));
     recovery_info.size = ssc->snapset.clone_size[soid.snap];
-  } else {
+  } else {//非快照场景
     // pulling head or unversioned object.
     // always pull the whole thing.
-    recovery_info.copy_subset.insert(0, (uint64_t)-1);
+    recovery_info.copy_subset.insert(0, (uint64_t)-1);//整个对象拷贝
     recovery_info.size = ((uint64_t)-1);
   }
 
   h->pulls[fromshard].push_back(PullOp());
-  PullOp &op = h->pulls[fromshard].back();
+  PullOp &op = h->pulls[fromshard].back();//初始化PullOp的recover_info和recovery_process
   op.soid = soid;
 
   op.recovery_info = recovery_info;
@@ -1743,7 +1743,7 @@ bool ReplicatedBackend::handle_pull_response(
   }
 
   PullInfo &pi = piter->second;
-  if (pi.recovery_info.size == (uint64_t(-1))) {
+  if (pi.recovery_info.size == (uint64_t(-1))) {//表示要恢复整个对象的场景
     pi.recovery_info.size = pop.recovery_info.size;
     pi.recovery_info.copy_subset.intersection_of(
       pop.recovery_info.copy_subset);
@@ -1811,7 +1811,7 @@ bool ReplicatedBackend::handle_pull_response(
     get_parent()->on_local_recover(
       hoid, pi.recovery_info, pi.obc, false, t);
     return false;
-  } else {
+  } else {//没完成的场景
     response->soid = pop.soid;
     response->recovery_info = pi.recovery_info;
     response->recovery_progress = pi.recovery_progress;
@@ -1926,7 +1926,7 @@ int ReplicatedBackend::build_push_op(const ObjectRecoveryInfo &recovery_info,
   if (!out_progress)
     out_progress = &_new_progress;
   ObjectRecoveryProgress &new_progress = *out_progress;
-  new_progress = progress;
+  new_progress = progress;//process表示当前的recover进度，new_progress本次push之后的进度
 
   dout(7) << __func__ << " " << recovery_info.soid
 	  << " v " << recovery_info.version
@@ -1935,7 +1935,7 @@ int ReplicatedBackend::build_push_op(const ObjectRecoveryInfo &recovery_info,
           << dendl;
 
   eversion_t v  = recovery_info.version;
-  if (progress.first) {
+  if (progress.first) {//omap header和attr属性内容相对较少
     int r = store->omap_get_header(coll, ghobject_t(recovery_info.soid), &out_op->omap_header);
     if(r < 0) {
       dout(1) << __func__ << " get omap header failed: " << cpp_strerror(-r) << dendl; 
@@ -1950,7 +1950,7 @@ int ReplicatedBackend::build_push_op(const ObjectRecoveryInfo &recovery_info,
     // Debug
     bufferlist bv = out_op->attrset[OI_ATTR];
     object_info_t oi;
-    try {
+    try {//解析object_info
      bufferlist::iterator bliter = bv.begin();
      ::decode(oi, bliter);
     } catch (...) {
@@ -1961,7 +1961,7 @@ int ReplicatedBackend::build_push_op(const ObjectRecoveryInfo &recovery_info,
     // If requestor didn't know the version, use ours
     if (v == eversion_t()) {
       v = oi.version;
-    } else if (oi.version != v) {
+    } else if (oi.version != v) {//确保请求要求的object版本和真实的object版本一致
       get_parent()->clog_error() << get_info().pgid << " push "
 				 << recovery_info.soid << " v "
 				 << recovery_info.version
@@ -1977,7 +1977,7 @@ int ReplicatedBackend::build_push_op(const ObjectRecoveryInfo &recovery_info,
   assert(v != eversion_t());
 
   uint64_t available = cct->_conf->osd_recovery_max_chunk;
-  if (!progress.omap_complete) {
+  if (!progress.omap_complete) {//上一次push，omap未完成的场景
     ObjectMap::ObjectMapIterator iter =
       store->get_omap_iterator(coll,
 			       ghobject_t(recovery_info.soid));
@@ -1988,11 +1988,11 @@ int ReplicatedBackend::build_push_op(const ObjectRecoveryInfo &recovery_info,
       if (!out_op->omap_entries.empty() &&
 	  ((cct->_conf->osd_recovery_max_omap_entries_per_chunk > 0 &&
 	    out_op->omap_entries.size() >= cct->_conf->osd_recovery_max_omap_entries_per_chunk) ||
-	   available <= iter->key().size() + iter->value().length()))
+	   available <= iter->key().size() + iter->value().length()))//kv个数达到osd_recovery_max_omap_entries_per_chunk，则退出循环
 	break;
       out_op->omap_entries.insert(make_pair(iter->key(), iter->value()));
 
-      if ((iter->key().size() + iter->value().length()) <= available)
+      if ((iter->key().size() + iter->value().length()) <= available)//没insert一个key，则也要算key对应value的大小
 	available -= (iter->key().size() + iter->value().length());
       else
 	available = 0;
@@ -2004,21 +2004,21 @@ int ReplicatedBackend::build_push_op(const ObjectRecoveryInfo &recovery_info,
   }
 
   if (available > 0) {
-    if (!recovery_info.copy_subset.empty()) {
+    if (!recovery_info.copy_subset.empty()) {//push data部分
       interval_set<uint64_t> copy_subset = recovery_info.copy_subset;
       map<uint64_t, uint64_t> m;
       int r = store->fiemap(ch, ghobject_t(recovery_info.soid), 0,
-                            copy_subset.range_end(), m);
+                            copy_subset.range_end(), m);//获取数据对应的区间范围set
       if (r >= 0)  {
         interval_set<uint64_t> fiemap_included(m);
-        copy_subset.intersection_of(fiemap_included);
+        copy_subset.intersection_of(fiemap_included);//copy_subset保存了该对象对应的所有数据区间
       } else {
         // intersection of copy_subset and empty interval_set would be empty anyway
         copy_subset.clear();
       }
 
       out_op->data_included.span_of(copy_subset, progress.data_recovered_to,
-                                    available);
+                                    available);//span of会把copy_subset从小到大，满足available的大小保存到data_included中
       if (out_op->data_included.empty()) // zero filled section, skip to end!
         new_progress.data_recovered_to = recovery_info.copy_subset.range_end();
       else
@@ -2027,7 +2027,7 @@ int ReplicatedBackend::build_push_op(const ObjectRecoveryInfo &recovery_info,
   } else {
     out_op->data_included.clear();
   }
-
+  //获取了数据区间后，开始读数据
   for (interval_set<uint64_t>::iterator p = out_op->data_included.begin();
        p != out_op->data_included.end();
        ++p) {
@@ -2043,7 +2043,7 @@ int ReplicatedBackend::build_push_op(const ObjectRecoveryInfo &recovery_info,
     if (r < 0) {
       return r;
     }
-    if (p.get_len() != bit.length()) {
+    if (p.get_len() != bit.length()) {//读到的数据大小和filemap返回的数据区间不一致
       dout(10) << " extent " << p.get_start() << "~" << p.get_len()
 	       << " is actually " << p.get_start() << "~" << bit.length()
 	       << dendl;
@@ -2058,7 +2058,7 @@ int ReplicatedBackend::build_push_op(const ObjectRecoveryInfo &recovery_info,
         out_op->data_included.erase(save);
       }
       new_progress.data_complete = true;
-      out_op->data.claim_append(bit);
+      out_op->data.claim_append(bit);//读取的数据append到data中
       break;
     }
     out_op->data.claim_append(bit);
@@ -2171,10 +2171,10 @@ void ReplicatedBackend::handle_pull(pg_shard_t peer, PullOp &op, PushOp *reply)
 			       << peer << " tried to pull " << soid
 			       << " but got " << cpp_strerror(-r);
     prep_push_op_blank(soid, reply);
-  } else {
+  } else {//正常流程
     ObjectRecoveryInfo &recovery_info = op.recovery_info;
     ObjectRecoveryProgress &progress = op.recovery_progress;
-    if (progress.first && recovery_info.size == ((uint64_t)-1)) {
+    if (progress.first && recovery_info.size == ((uint64_t)-1)) {//第一次请求需要填写object大小
       // Adjust size and copy_subset
       recovery_info.size = st.st_size;
       recovery_info.copy_subset.clear();
@@ -2275,7 +2275,7 @@ int ReplicatedBackend::start_pushes(
   for (set<pg_shard_t>::iterator i =
 	 get_parent()->get_actingbackfill_shards().begin();
        i != get_parent()->get_actingbackfill_shards().end();
-       ++i) {
+       ++i) {//shards保存丢失该对象的其他osd以及missing信息
     if (*i == get_parent()->whoami_shard()) continue;
     pg_shard_t peer = *i;
     map<pg_shard_t, pg_missing_t>::const_iterator j =
@@ -2293,7 +2293,7 @@ int ReplicatedBackend::start_pushes(
     pg_shard_t peer = j->first;
     h->pushes[peer].push_back(PushOp());
     int r = prep_push_to_replica(obc, soid, peer,
-	    &(h->pushes[peer].back()), cache);
+	    &(h->pushes[peer].back()), cache);//准备PushOp
     if (r < 0) {
       // Back out all failed reads
       for (auto k : shards) {
